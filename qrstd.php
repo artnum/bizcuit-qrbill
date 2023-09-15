@@ -1,4 +1,8 @@
 <?php
+namespace BizCuit\SwissQR;
+
+use \stdClass;
+
 /* QR Standard according to SIX Group, publishing implementation guideline for
  * the Swiss QR Bill. Follows version 2.2. 
  * https://www.six-group.com/dam/download/banking-services/standardization/qr-bill/ig-qr-bill-v2.2-fr.pdf

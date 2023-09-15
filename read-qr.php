@@ -2,8 +2,10 @@
 /* 
  * Read QR for SwissQR-Bill
  */
-
 require('qrstd.php');
+
+use function BizCuit\SwissQR\verify_qrdata;
+use function BizCuit\SwissQR\bexio_from_qrdata;
 
 /* qrscanner: https://www.npmjs.com/package/qr-scanner-cli
  * convert: https://imagemagick.org/
