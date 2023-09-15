@@ -38,8 +38,12 @@ $SWISS_QRSTD = [
     ]
 ];
 
+define('MODULUS', 97);
+
 /* thanks to https://commons.apache.org/proper/commons-validator/apidocs/src-html/org/apache/commons/validator/routines/checkdigit/IBANCheckDigit.html */
-function iso7064mod97_10 ($ref) {
+function iso7064mod97_10 (string $ref): int {
+    define('MAX_TOTAL', 999999999);
+    define('MAX_ALPHANUMERIC', 35);
     $LETTER_TO_NUMBER = [
         '0' => 0, '1' => 1, '2' => 2, '3' => 3, '4' => 4,
         '5' => 5, '6' => 6, '7' => 7, '8' => 8, '9' => 9,
@@ -57,15 +61,16 @@ function iso7064mod97_10 ($ref) {
     for ($i = 0; $i < strlen($ref); $i++) {
         $value = 0;
         if (isset($LETTER_TO_NUMBER[$ref[$i]])) { $value = $LETTER_TO_NUMBER[$ref[$i]]; }
+        if ($value < 0 || $value > MAX_ALPHANUMERIC) { return -1; }
         $total = ($value > 9 ? $total * 100 : $total * 10) + $value;
-        if ($total > 999999999) {
-            $total = $total % 97;
+        if ($total > MAX_TOTAL) {
+            $total = $total % MODULUS;
         }
     }
     return $total;
 }
 
-function swissMod10($ref) {
+function swissMod10(string $ref): int {
     $bvr_table = [
         [0, 9, 4, 6, 8, 2, 7, 1, 3, 5],
         [9, 4, 6, 8, 2, 7, 1, 3, 5, 0],
@@ -87,24 +92,24 @@ function swissMod10($ref) {
     return [0, 9, 8, 7, 6, 5, 4, 3, 2, 1][$r];
 }
 
-function get_iso7064_checksum (string $value) {
+function get_iso7064_checksum (string $value): string {
     $value = substr($value, 4) . substr($value, 0, 2) . '00';
-    return sprintf('%02d', 98-iso7064mod97_10($value));
+    return sprintf('%02d', (MODULUS + 1) - iso7064mod97_10($value));
 }
 
-function iban_verify (string $iban) {
-    return iso7064mod97_10(substr($iban, 4) . substr($iban, 0, 4)) % 97 === 1;
+function iban_verify (string $iban): bool {
+    return iso7064mod97_10(substr($iban, 4) . substr($iban, 0, 4)) % MODULUS === 1;
 }
 
 /* creditor reference starts with RF and can be anything */
-function creditorref_verify (string $reference) {
-    return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) % 97 === 1;
+function creditorref_verify (string $reference): bool {
+    return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) % MODULUS === 1;
 }
 
 /* reference is a swiss specific code that part is given by the bank and the
  * the remaining space is free to use by the user. It use a modulo 10 algorithm.
  */
-function reference_verify (string $reference) {
+function reference_verify (string $reference): bool {
     if (!ctype_digit($reference)) { return false; }
     $checksum = intval(substr($reference, -1, 1));
     $reference = substr($reference, 0, strlen($reference) - 1);
@@ -112,7 +117,7 @@ function reference_verify (string $reference) {
 }
 
 /* verify only version 0200, refactor when another version appear */
-function verify_qrdata (&$qrarray) {
+function verify_qrdata (array &$qrarray): bool {
     global $SWISS_QRSTD;
 
     if ($qrarray[0] !== 'SPC') { return false; }
@@ -190,7 +195,7 @@ function verify_qrdata (&$qrarray) {
     return true;
 }
 
-function bexio_from_qrdata ($qrarray) {
+function bexio_from_qrdata (array $qrarray): stdClass {
     global $SWISS_QRSTD;
 
     $std = $SWISS_QRSTD[$qrarray[1]];
