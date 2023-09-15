@@ -36,11 +36,9 @@ define('XPOS', round(62 * RATIO));
 // YPOS is 32mm from bottom of the page.
 define('YPOS', round(32 * RATIO));
 
-$filename = $argv[1];
+$filename = escapeshellarg(realpath($argv[1]));
 $dir = DATADIR . '/' . md5($filename);
 mkdir($dir, 0777, true);
-
-echo $argv[1] . "\n";
 
 $rotate = 0;
 $found = false;
@@ -49,8 +47,6 @@ $found = false;
  * and try again until a qr code is found.
  */
 do {
-	echo 'Rotate: ' . $rotate . "\n";
-	
 	/* -gravity SouthWest allows to position from the bottom left of the page
 	 * -crop 66x66+62+32 crops the image to 66x66 pixels starting at 62mm from
 	 * the left of the page and 32mm from the bottom of the page.
@@ -61,11 +57,9 @@ do {
 	if (!$dh) { break; }
 	while(($file = readdir($dh)) !== false) {
 		if ($file === '.' || $file === '..') { continue; }
-		echo 'File: ' . $file . "\n";
 		$output = [];
 		$rescode = 0;
 		exec(QRAPP . ' ' . $dir . '/' . $file . ' --clear 2>&1', $output, $rescode);
-		echo 'Rescode: ' . $rescode . "\n";
 		if ($rescode !== 0) { continue; }
 		$lastidx = count($output) - 1;
 
@@ -85,6 +79,15 @@ do {
 	if($found) { break; }
 	$rotate += 90;
 } while ($rotate != 360);
+
+/* cleanup */
+rewinddir($dh);
+while(($file = readdir($dh)) !== false) {
+	if ($file === '.' || $file === '..') { continue; }
+	unlink($dir . '/' . $file);
+}
+rmdir($dir);
+
 
 if(!$found) { return -1; }
 if (!verify_qrdata($output)) { return -1; }
