@@ -31,8 +31,8 @@ define('RATIO', DENSITY / 25.4);
 define('QRSIZE', round(66 * RATIO));
 // must be 62mm from the left of the page
 define('XPOS', round(62 * RATIO));
-// 297mm, page height, - 95mm and 5mm.
-define('YPOS', round(197 * RATIO));
+// YPOS is 32mm from bottom of the page.
+define('YPOS', round(32 * RATIO));
 
 $filename = $argv[1];
 $dir = DATADIR . '/' . md5($filename);
@@ -49,7 +49,12 @@ $found = false;
 do {
 	echo 'Rotate: ' . $rotate . "\n";
 	
-	exec(IMGCONV . ' -density ' . DENSITY . ' -colorspace gray -background white -alpha remove -alpha off -crop  ' . sprintf('%dx%d+%d+%d', QRSIZE, QRSIZE, XPOS, YPOS) . ' -rotate ' . $rotate . ' ' . $filename . ' ' . $dir . '/o.png');
+	/* -gravity SouthWest allows to position from the bottom left of the page
+	 * -crop 66x66+62+32 crops the image to 66x66 pixels starting at 62mm from
+	 * the left of the page and 32mm from the bottom of the page.
+	 * -rotate rotates the image by 90 degrees.
+	 */
+	exec(IMGCONV . ' -density ' . DENSITY . ' -colorspace gray -background white -alpha remove -alpha off  -gravity SouthWest -crop  ' . sprintf('%dx%d+%d+%d', QRSIZE, QRSIZE, XPOS, YPOS) . ' -rotate ' . $rotate . ' ' . $filename . ' ' . $dir . '/o.png');
 	$dh = opendir($dir);
 	if (!$dh) { break; }
 	while(($file = readdir($dh)) !== false) {
