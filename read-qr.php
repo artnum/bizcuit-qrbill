@@ -6,15 +6,16 @@ require('qrstd.php');
 
 use function BizCuit\SwissQR\verify_qrdata;
 use function BizCuit\SwissQR\bexio_from_qrdata;
+use Zxing\QrReader;
 
-/* qrscanner: https://www.npmjs.com/package/qr-scanner-cli
- * convert: https://imagemagick.org/
+/* convert: https://imagemagick.org/
  * 
  * /!\ zbarimg is not used as it doesn't work with the QR code on the swissqr,
  * the documentation require to have a swiss flag in the middle of the QR code
  * which trips zbarimg.
  */
-define('QRAPP', '/usr/local/bin/qrscanner');
+require(__DIR__ . '/vendor/autoload.php');
+
 define('IMGCONV', '/usr/bin/convert');
 define('DATADIR', './data/');
 /* Below 300dpi, the quality is not good enough so that it doesn't always detect
@@ -59,10 +60,11 @@ do {
 		if ($file === '.' || $file === '..') { continue; }
 		$output = [];
 		$rescode = 0;
-		exec(QRAPP . ' ' . $dir . '/' . $file . ' --clear 2>&1', $output, $rescode);
-		if ($rescode !== 0) { continue; }
+		$qrreader = new QRReader($dir.'/'.$file);
+		$text = $qrreader->text($output);
+		if ($text === false) { continue; }
+		$output = preg_split("/\r\n|\n/", $text);
 		$lastidx = count($output) - 1;
-
 		/* EPD must happend somewhere in the last 4 for lines */
 		if ($output[0] === 'SPC' 
 			&&
