@@ -63,7 +63,13 @@ do {
 		$qrreader = new QRReader($dir.'/'.$file);
 		$text = $qrreader->text($output);
 		if ($text === false) { continue; }
-		$output = preg_split("/\r\n|\n/", $text);
+		/* documentation says only CR+LF or LF allowed, but we allow for almost
+		 * anything.
+		 */
+		$output = preg_split("/\r\n|\n\r|\n|\r/", $text);
+		if ($output === false) { continue; }
+		/* remove trailing spaces */
+		$output = array_map('trim', $output);
 		$lastidx = count($output) - 1;
 		/* EPD must happend somewhere in the last 4 for lines */
 		if ($output[0] === 'SPC' 
