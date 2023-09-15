@@ -10,6 +10,7 @@ use \stdClass;
 $SWISS_QRSTD = [
     '0200' => [
         '_RESERVED' => [11, 12, 13, 14, 15, 16, 17],
+        'CODING' => ['line' => 2],
         'IBAN' => ['line' => 3],
         'ADDR_CREDITOR_TYPE' => ['line' => 4],
         'ADDR_CREDITOR_NAME' => ['line' => 5],
@@ -105,12 +106,16 @@ function reference_verify (string $reference) {
     return swissMod10($reference) === $checksum;
 }
 
+/* verify only version 0200, refactor when another version appear */
 function verify_qrdata (&$qrarray) {
     global $SWISS_QRSTD;
 
     if ($qrarray[0] !== 'SPC') { return false; }
     $std = $SWISS_QRSTD[$qrarray[1]];
     if (!isset($std)) { return false; }
+
+    /* can be only 1, means utf-8 */
+    if ($qrarray[$std['CODING']['line']] !== '1') { return false; }
 
     /* make all upper case for easier comparison */
     $qrarray[$std['REFERENCE_TYPE']['line']] = strtoupper($qrarray[$std['REFERENCE_TYPE']['line']]);
