@@ -62,7 +62,7 @@ function iso7064mod97_10 ($ref) {
             $total = $total % 97;
         }
     }
-    return $total % 97;
+    return $total;
 }
 
 function swissMod10($ref) {
@@ -87,13 +87,18 @@ function swissMod10($ref) {
     return [0, 9, 8, 7, 6, 5, 4, 3, 2, 1][$r];
 }
 
+function get_iso7064_checksum (string $value) {
+    $value = substr($value, 4) . substr($value, 0, 2) . '00';
+    return sprintf('%02d', 98-iso7064mod97_10($value));
+}
+
 function iban_verify (string $iban) {
-    return iso7064mod97_10(substr($iban, 4) . substr($iban, 0, 4)) === 1;
+    return iso7064mod97_10(substr($iban, 4) . substr($iban, 0, 4)) % 97 === 1;
 }
 
 /* creditor reference starts with RF and can be anything */
 function creditorref_verify (string $reference) {
-    return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) === 1;
+    return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) % 97 === 1;
 }
 
 /* reference is a swiss specific code that part is given by the bank and the
