@@ -38,8 +38,7 @@ $SWISS_QRSTD = [
     ]
 ];
 
-define('MODULUS', 97);
-
+define('ISO7064_MODULUS', 97);
 /* thanks to https://commons.apache.org/proper/commons-validator/apidocs/src-html/org/apache/commons/validator/routines/checkdigit/IBANCheckDigit.html */
 function iso7064mod97_10 (string $ref): int {
     define('MAX_TOTAL', 999999999);
@@ -64,7 +63,7 @@ function iso7064mod97_10 (string $ref): int {
         if ($value < 0 || $value > MAX_ALPHANUMERIC) { return -1; }
         $total = ($value > 9 ? $total * 100 : $total * 10) + $value;
         if ($total > MAX_TOTAL) {
-            $total = $total % MODULUS;
+            $total = $total % ISO7064_MODULUS;
         }
     }
     return $total;
@@ -94,16 +93,16 @@ function swissMod10(string $ref): int {
 
 function get_iso7064_checksum (string $value): string {
     $value = substr($value, 4) . substr($value, 0, 2) . '00';
-    return sprintf('%02d', (MODULUS + 1) - iso7064mod97_10($value));
+    return sprintf('%02d', (ISO7064_MODULUS + 1) - iso7064mod97_10($value));
 }
 
 function iban_verify (string $iban): bool {
-    return iso7064mod97_10(substr($iban, 4) . substr($iban, 0, 4)) % MODULUS === 1;
+    return iso7064mod97_10(substr($iban, 4) . substr($iban, 0, 4)) % ISO7064_MODULUS === 1;
 }
 
 /* creditor reference starts with RF and can be anything */
 function creditorref_verify (string $reference): bool {
-    return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) % MODULUS === 1;
+    return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) % ISO7064_MODULUS === 1;
 }
 
 /* reference is a swiss specific code that part is given by the bank and the
@@ -202,8 +201,9 @@ function bexio_from_qrdata (array $qrarray): stdClass {
     if (!isset($std)) { return false; }
 
     $object = new stdClass();
-
     $object->instructed_amount = new stdClass();
+    $object->recipient = new stdClass();
+
     $object->instructed_amount->currency = $qrarray[$std['CURRENCY']['line']];
     $object->instructed_amount->amount = $qrarray[$std['AMOUNT']['line']];
 
@@ -214,7 +214,6 @@ function bexio_from_qrdata (array $qrarray): stdClass {
      * order to have Bexio accept the bill ... line 2 must be splitted into two 
      * parts to have Bexio accept the bill.
      */
-    $object->recipient = new stdClass();
     $object->recipient->name = $qrarray[$std['ADDR_CREDITOR_NAME']['line']];
     $object->recipient->country_code = $qrarray[$std['ADDR_CREDITOR_COUNTRY']['line']];
 
