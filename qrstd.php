@@ -227,7 +227,8 @@ function bexio_from_qrdata ($qrarray) {
             break;
     }
 
-    if (isset($qrarray[$std['ADDITIONNAL_INFO']['line']])) {
+    if (isset($qrarray[$std['ADDITIONNAL_INFO']['line']]) 
+        && !empty($qrarray[$std['ADDITIONNAL_INFO']['line']])) {
         $object->additional_information = $qrarray[$std['ADDITIONNAL_INFO']['line']];
     }
     return $object;
