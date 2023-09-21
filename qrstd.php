@@ -9,40 +9,41 @@ use \stdClass;
  */
 $SWISS_QRSTD = [
     '0200' => [
-        '_RESERVED' => [11, 12, 13, 14, 15, 16, 17],
-        'CODING' => ['line' => 2],
-        'IBAN' => ['line' => 3],
-        'ADDR_CREDITOR_TYPE' => ['line' => 4],
-        'ADDR_CREDITOR_NAME' => ['line' => 5],
-        'ADDR_CREDITOR_STREET_OR_LINE1' => ['line' => 6],
-        'ADDR_CREDITOR_HOUSE_OR_LINE2' => ['line' => 7],
-        'ADDR_CREDITOR_NPA' => ['line' => 8],
-        'ADDR_CREDITOR_CITY' => ['line' => 9],
-        'ADDR_CREDITOR_COUNTRY' => ['line' => 10],
-        'AMOUNT' => ['line' => 18],
-        'CURRENCY' => ['line' => 19],
-        'ADDR_DEBITOR_TYPE' => ['line' => 20],
-        'ADDR_DEBITOR_NAME' => ['line' => 21],
-        'ADDR_DEBITOR_STREET_OR_LINE1' => ['line' => 22],
-        'ADDR_DEBITOR_HOUSE_OR_LINE2' => ['line' => 23],
-        'ADDR_DEBITOR_NPA' => ['line' => 24],
-        'ADDR_DEBITOR_CITY' => ['line' => 25],
-        'ADDR_DEBITOR_COUNTRY' => ['line' => 26],
-        'REFERENCE_TYPE' => ['line' => 27],
-        'REFERENCE' => ['line' => 28],
-        'COMMUNICATION' => ['line' => 29],
-        'EPD' => ['line' => 30],
-        'ADDITIONNAL_INFO' => ['line' => 31],
-        'PARAMS1' => ['line' => 32],
-        'PARAMS2' => ['line' => 33]
+        '_RESERVED' =>                      [11, 12, 13, 14, 15, 16, 17],
+        'VERSION' =>                        1,
+        'CODING' =>                         2,
+        'IBAN' =>                           3,
+        'ADDR_CREDITOR_TYPE' =>             4,
+        'ADDR_CREDITOR_NAME' =>             5,
+        'ADDR_CREDITOR_STREET_OR_LINE1' =>  6,
+        'ADDR_CREDITOR_HOUSE_OR_LINE2' =>   7,
+        'ADDR_CREDITOR_NPA' =>              8,
+        'ADDR_CREDITOR_CITY' =>             9,
+        'ADDR_CREDITOR_COUNTRY' =>          10,
+        'AMOUNT' =>                         18,
+        'CURRENCY' =>                       19,
+        'ADDR_DEBITOR_TYPE' =>              20,
+        'ADDR_DEBITOR_NAME' =>              21,
+        'ADDR_DEBITOR_STREET_OR_LINE1' =>   22,
+        'ADDR_DEBITOR_HOUSE_OR_LINE2' =>    23,
+        'ADDR_DEBITOR_NPA' =>               24,
+        'ADDR_DEBITOR_CITY' =>              25,
+        'ADDR_DEBITOR_COUNTRY' =>           26,
+        'REFERENCE_TYPE' =>                 27,
+        'REFERENCE' =>                      28,
+        'COMMUNICATION' =>                  29,
+        'EPD' =>                            30,
+        'ADDITIONNAL_INFO' =>               31,
+        'ALT_PROCEDURE1' =>                 32,
+        'ALT_PROCEDURE2' =>                 33
     ]
 ];
 
-define('ISO7064_MODULUS', 97);
+define('ISO7064_MODULUS',   97);
+define('MAX_TOTAL',         999999999);
+define('MAX_ALPHANUMERIC',  35);
 /* thanks to https://commons.apache.org/proper/commons-validator/apidocs/src-html/org/apache/commons/validator/routines/checkdigit/IBANCheckDigit.html */
 function iso7064mod97_10 (string $ref): int {
-    define('MAX_TOTAL', 999999999);
-    define('MAX_ALPHANUMERIC', 35);
     $LETTER_TO_NUMBER = [
         '0' => 0, '1' => 1, '2' => 2, '3' => 3, '4' => 4,
         '5' => 5, '6' => 6, '7' => 7, '8' => 8, '9' => 9,
@@ -66,7 +67,7 @@ function iso7064mod97_10 (string $ref): int {
             $total = $total % ISO7064_MODULUS;
         }
     }
-    return $total;
+    return $total % ISO7064_MODULUS;
 }
 
 function swissMod10(string $ref): int {
@@ -84,7 +85,6 @@ function swissMod10(string $ref): int {
     ];
 
     $r = 0;
-    //$ref = strrev($ref);
     for ($i = 0; $i < strlen($ref); $i++) {
         $r = $bvr_table[$r][intval($ref[$i])];
     }
@@ -105,6 +105,10 @@ function creditorref_verify (string $reference): bool {
     return iso7064mod97_10(substr($reference, 4) . substr($reference, 0, 4)) % ISO7064_MODULUS === 1;
 }
 
+function generic_iso7064_checksum (string $reference) {
+    return sprintf('%02d', (ISO7064_MODULUS + 1) - iso7064mod97_10($reference));
+}
+
 /* reference is a swiss specific code that part is given by the bank and the
  * the remaining space is free to use by the user. It use a modulo 10 algorithm.
  */
@@ -115,82 +119,144 @@ function reference_verify (string $reference): bool {
     return swissMod10($reference) === $checksum;
 }
 
-/* verify only version 0200, refactor when another version appear */
-function verify_qrdata (array &$qrarray): bool {
-    global $SWISS_QRSTD;
+/**
+ * Remove lines before beginning of QR data.
+ * 
+ * @params string[] $qrarray Raw QR data
+ * @return string[] QR data starting with SPC
+ */
+function trim_qrdata (array $qrarray): array {
+    while ($qrarray[0] !== 'SPC') { array_shift($qrarray); }
+    return $qrarray;
+}
 
-    if ($qrarray[0] !== 'SPC') { return false; }
-    $std = $SWISS_QRSTD[$qrarray[1]];
-    if (!isset($std)) { return false; }
+/**
+ * Verify QR data according to SIX Group documentation.
+ * 
+ * Support only version 2.0 as it's the only one documented yet.
+ * 
+ * @param string[] $qrarray Raw QR data
+ * @param string $error If QR data is invalid, contains the field that is invalid
+ * @return bool True if QR data is valid, false otherwise
+ * 
+ */
+define('MAX_NAME_LEN',              70);
+define('MAX_STREET_LINE1_LEN',      70);
+define('MAX_LINE2_LEN',             70);
+define('MAX_HOUSE_LEN',             16);
+define('MAX_NPA_LEN',               16);
+define('MAX_CITY_LEN',              35);
+define('MAX_COMM_LEN',              140);
+define('MAX_ALT_PROCEDURE_LEN',     100);
+define('QRR_IBAN_NUMBER_POS',       4);
+define('QRR_IBAN_DIGIT',            3);
+define('QRR_REFERENCE_LEN',         27);
+define('SCOR_REFERENCE_MIN_LEN',    5);
+define('SCOR_REFERENCE_MAX_LEN',    25);
+
+function verify_qrdata (array $qrarray, &$error = ''): bool {
+    global $SWISS_QRSTD;
+    $std = $SWISS_QRSTD['0200'];
+
+    if ($qrarray[0] !== 'SPC') { $error = 'SPC'; return false; }
+    if(!isset($qrarray[$std['VERSION']])
+        || empty($qrarray[$std['VERSION']])
+        || $qrarray[$std['VERSION']] !== '0200') { $error = 'VERSION'; return false; }
 
     /* can be only 1, means utf-8 */
-    if ($qrarray[$std['CODING']['line']] !== '1') { return false; }
+    if ($qrarray[$std['CODING']] !== '1') { $error = 'CODING'; return false; }
 
     /* make all upper case for easier comparison */
-    $qrarray[$std['REFERENCE_TYPE']['line']] = strtoupper($qrarray[$std['REFERENCE_TYPE']['line']]);
-    $qrarray[$std['CURRENCY']['line']] = strtoupper($qrarray[$std['CURRENCY']['line']]);
-    $qrarray[$std['ADDR_CREDITOR_COUNTRY']['line']] = strtoupper($qrarray[$std['ADDR_CREDITOR_COUNTRY']['line']]);
-    $qrarray[$std['ADDR_DEBITOR_COUNTRY']['line']] = strtoupper($qrarray[$std['ADDR_DEBITOR_COUNTRY']['line']]);
+    $qrarray[$std['REFERENCE_TYPE']] = strtoupper($qrarray[$std['REFERENCE_TYPE']]);
+    $qrarray[$std['CURRENCY']] = strtoupper($qrarray[$std['CURRENCY']]);
+    $qrarray[$std['ADDR_CREDITOR_COUNTRY']] = strtoupper($qrarray[$std['ADDR_CREDITOR_COUNTRY']]);
+    $qrarray[$std['ADDR_DEBITOR_COUNTRY']] = strtoupper($qrarray[$std['ADDR_DEBITOR_COUNTRY']]);
 
-    if ($qrarray[$std['EPD']['line']] !== 'EPD') { echo "EPD FALSE\n"; return false; }
+    if ($qrarray[$std['EPD']] !== 'EPD') { $error= 'EPD'; return false; }
 
     /* RESERVED FOR FUTURE USE, MUST BE EMPTY */
     foreach($std['_RESERVED'] as $reserved) {
-        if (!empty($qrarray[$reserved])) { return false; }
+        if (!empty($qrarray[$reserved])) { $error = '_RESERVED'; return false; }
     }
 
     /* MANDATORY FIELDS */
-    if (empty($qrarray[$std['IBAN']['line']])) { return false; }
-    if (empty($qrarray[$std['CURRENCY']['line']])) { return false; }
-    if (empty($qrarray[$std['ADDR_CREDITOR_TYPE']['line']])) { return false; }
-    if (empty($qrarray[$std['ADDR_DEBITOR_TYPE']['line']])) { return false; }
-    if (empty($qrarray[$std['ADDR_CREDITOR_NAME']['line']])) { return false; }
-    if (empty($qrarray[$std['ADDR_DEBITOR_NAME']['line']])) { return false; }
-    if (empty($qrarray[$std['ADDR_CREDITOR_COUNTRY']['line']])) { return false; }
-    if (empty($qrarray[$std['ADDR_DEBITOR_COUNTRY']['line']])) { return false; }
+    if (empty($qrarray[$std['IBAN']])) { $error = 'IBAN'; return false; }
+    if (empty($qrarray[$std['CURRENCY']])) { $error = 'CURRENCY'; return false; }
+    if (empty($qrarray[$std['ADDR_CREDITOR_TYPE']])) { $error = 'ADDR_CREDITOR_TYPE'; return false; }
+    if (empty($qrarray[$std['ADDR_DEBITOR_TYPE']])) { $error = 'ADDR_DEBITOR_TYPE'; return false; }
+    if (empty($qrarray[$std['ADDR_CREDITOR_NAME']])) { $error = 'ADDR_CREDITOR_NAME'; return false; }
+    if (empty($qrarray[$std['ADDR_DEBITOR_NAME']])) { $error = 'ADDR_DEBITOR_NAME'; return false; }
+    if (empty($qrarray[$std['ADDR_CREDITOR_COUNTRY']])) { $error = 'ADDR_CREDITOR_COUNTRY'; return false; }
+    if (empty($qrarray[$std['ADDR_DEBITOR_COUNTRY']])) { $error = 'ADDR_DEBITOR_COUNTRY'; return false; }
 
     /* verify IBAN checksum */
-    if (iban_verify($qrarray[$std['IBAN']['line']]) === false) { echo "IBAN FALSE\n"; return false; }
+    if (iban_verify($qrarray[$std['IBAN']]) === false) { $error = 'IBAN'; return false; }
 
-    switch($qrarray[$std['REFERENCE_TYPE']['line']]) {
+    switch($qrarray[$std['REFERENCE_TYPE']]) {
         case 'SCOR':
-            $len = strlen($qrarray[$std['REFERENCE']['line']]);
-            if ($len < 5 || $len > 25) { return false; }
-            if (creditorref_verify($qrarray[$std['REFERENCE']['line']]) === false) { return false; }
+            $len = strlen($qrarray[$std['REFERENCE']]);
+            if ($len < SCOR_REFERENCE_MIN_LEN
+                || $len > SCOR_REFERENCE_MAX_LEN) { return false; }
+            if (creditorref_verify($qrarray[$std['REFERENCE']]) === false) { $error = 'REFERENCE'; return false; }
             break;
         case 'QRR':
             /* For QRR, the bank identifier must start with 3 as per swissqr documentation */
-            if (substr($qrarray[$std['IBAN']['line']], 4, 1) !== '3') { return false; }
+            if (substr($qrarray[$std['IBAN']], QRR_IBAN_NUMBER_POS, 1) !== strval(QRR_IBAN_DIGIT)) { $error = 'IBAN'; return false; }
             /* QRR is only for CHF and EUR */
             if (
-                $qrarray[$std['CURRENCY']['line']] !== 'CHF'
-                && $qrarray[$std['CURRENCY']['line']] !== 'EUR'
-            ) { return false; }
-            if (strlen($qrarray[$std['REFERENCE']['line']]) !== 27) { return false; }
-            if (reference_verify($qrarray[$std['REFERENCE']['line']]) === false) { return false; }
+                $qrarray[$std['CURRENCY']] !== 'CHF'
+                && $qrarray[$std['CURRENCY']] !== 'EUR'
+            ) { $error = 'CURRENCY'; return false; }
+            if (strlen($qrarray[$std['REFERENCE']]) !== QRR_REFERENCE_LEN) { $error = 'REFERENCE'; return false; }
+            if (reference_verify($qrarray[$std['REFERENCE']]) === false) { $error = 'REFERENCE'; return false; }
             break;
         case 'NON': 
-            if (!empty($qrarray[$std['REFERENCE']['line']])) { return false; }
+            if (!empty($qrarray[$std['REFERENCE']])) { $error = 'REFERENCE'; return false; }
             break;
-        default: return false;
+        default:
+            $error = 'REFERENCE_TYPE';
+            return false;
     }
 
     foreach(['ADDR_CREDITOR', 'ADDR_DEBITOR'] as $addrs) {
-        if (strlen($qrarray[$std[$addrs . '_COUNTRY']['line']]) !== 2) { return false; } 
-        switch($qrarray[$std[$addrs . '_TYPE']['line']]) {
+        if (empty($qrarray[$std[$addrs . '_NAME']])
+            || strlen($qrarray[$std[$addrs . '_NAME']]) > MAX_NAME_LEN) { $error = $addrs . '_NAME'; return false; }
+        if (empty($qrarray[$std[$addrs . '_COUNTRY']]) 
+            || strlen($qrarray[$std[$addrs . '_COUNTRY']]) !== 2) { $error = $addrs . '_COUNTRY'; return false; } 
+        switch($qrarray[$std[$addrs . '_TYPE']]) {
             case 'S':
+                if (empty($qrarray[$std[$addrs . '_NPA']]) 
+                    || strlen($qrarray[$std[$addrs . '_NPA']]) > MAX_NPA_LEN) { $error = $addrs . '_NPA'; return false; }
+                if (empty($qrarray[$std[$addrs . '_CITY']])
+                    || strlen($qrarray[$std[$addrs . '_CITY']]) > MAX_CITY_LEN) { $error = $addrs . '_CITY'; return false; }
+                if (!empty($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']])
+                    || strlen($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']]) > MAX_HOUSE_LEN) { $error = $addrs . '_HOUSE_OR_LINE2'; return false; }
+                if (!empty($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) 
+                    && strlen($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) > MAX_STREET_LINE1_LEN) { $error = $addrs . '_STREET_OR_LINE1'; return false; }
                 break;
             case 'K':
-                if (!empty($qrarray[$std[$addrs . '_NPA']['line']])) { return false; }
-                if (!empty($qrarray[$std[$addrs . '_CITY']['line']])) { return false; }
-                if (empty($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']['line']])) { return false; }
+                if (!empty($qrarray[$std[$addrs . '_NPA']])) { $error = $addrs . '_NPA'; return false; }
+                if (!empty($qrarray[$std[$addrs . '_CITY']])) { $error = $addrs . '_CITY'; return false; }
+                if (empty($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']])
+                    || strlen($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']]) > MAX_LINE2_LEN) { $error = $addrs . '_HOUSE_OR_LINE2'; return false; }
+                if (!empty($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) 
+                    && strlen($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) > MAX_STREET_LINE1_LEN) { $error = $addrs . '_STREET_OR_LINE1'; return false; }
                 break;
+            default:
+                $error = $addrs . '_TYPE';
+                return false;
         }
     }
 
-    if (!empty($qrarray[$std['ADDITIONNAL_INFO']['line']]) && strlen($qrarray[$std['ADDITIONNAL_INFO']['line']]) > 140) { return false; }
-    if (!empty($qrarray[$std['COMMUNICATION']['line']]) && strlen($qrarray[$std['COMMUNICATION']['line']]) > 140) { return false; }
+    if (!empty($qrarray[$std['ADDITIONNAL_INFO']]) 
+        && strlen($qrarray[$std['ADDITIONNAL_INFO']]) > MAX_COMM_LEN) { $error = 'ADDITIONNAL_INFO'; return false; }
+    if (!empty($qrarray[$std['COMMUNICATION']]) 
+        && strlen($qrarray[$std['COMMUNICATION']]) > MAX_COMM_LEN) { $error = 'COMMUNICATION'; return false; }
 
+    if (!empty($qrarray[$std['ALT_PROCEDURE1']]) 
+        && strlen($qrarray[$std['ALT_PROCEDURE1']]) > MAX_ALT_PROCEDURE_LEN) { $error = 'ALT_PROCEDURE1'; return false; }
+    if (!empty($qrarray[$std['ALT_PROCEDURE2']]) 
+        && strlen($qrarray[$std['ALT_PROCEDURE2']]) > MAX_ALT_PROCEDURE_LEN) { $error = 'ALT_PROCEDURE2'; return false; }
     return true;
 }
 
@@ -204,8 +270,8 @@ function bexio_from_qrdata (array $qrarray): stdClass {
     $object->instructed_amount = new stdClass();
     $object->recipient = new stdClass();
 
-    $object->instructed_amount->currency = $qrarray[$std['CURRENCY']['line']];
-    $object->instructed_amount->amount = $qrarray[$std['AMOUNT']['line']];
+    $object->instructed_amount->currency = $qrarray[$std['CURRENCY']];
+    $object->instructed_amount->amount = $qrarray[$std['AMOUNT']];
 
     /* here is the fun, Bexio seems to have not followd the guideline for Swiss
      * qr bills (which is funny for a company that pretend to specialist ont
@@ -214,36 +280,36 @@ function bexio_from_qrdata (array $qrarray): stdClass {
      * order to have Bexio accept the bill ... line 2 must be splitted into two 
      * parts to have Bexio accept the bill.
      */
-    $object->recipient->name = $qrarray[$std['ADDR_CREDITOR_NAME']['line']];
-    $object->recipient->country_code = $qrarray[$std['ADDR_CREDITOR_COUNTRY']['line']];
+    $object->recipient->name = $qrarray[$std['ADDR_CREDITOR_NAME']];
+    $object->recipient->country_code = $qrarray[$std['ADDR_CREDITOR_COUNTRY']];
 
-    if ($qrarray[$std['ADDR_CREDITOR_TYPE']['line']] === 'K') {
-        $object->recipient->street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']['line']];
+    if ($qrarray[$std['ADDR_CREDITOR_TYPE']] === 'K') {
+        $object->recipient->street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']];
         if (empty($object->recipient->street)) { $object->recipient->street = ' '; }
-        $l2parts = explode(' ', $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']['line']], 2);
+        $l2parts = explode(' ', $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']], 2);
         $object->recipient->zip = trim(array_shift($l2parts));
         $object->recipient->city = trim(array_shift($l2parts));
     } else {
-        $object->recipient->house_number = $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']['line']];
-        $object->recipient->street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']['line']];
-        $object->recipient->zip = $qrarray[$std['ADDR_CREDITOR_NPA']['line']];
-        $object->recipient->city = $qrarray[$std['ADDR_CREDITOR_CITY']['line']];
+        $object->recipient->house_number = $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']];
+        $object->recipient->street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']];
+        $object->recipient->zip = $qrarray[$std['ADDR_CREDITOR_NPA']];
+        $object->recipient->city = $qrarray[$std['ADDR_CREDITOR_CITY']];
     }
-    $object->iban = $qrarray[$std['IBAN']['line']];
+    $object->iban = $qrarray[$std['IBAN']];
 
-    switch($qrarray[$std['REFERENCE_TYPE']['line']]) {
+    switch($qrarray[$std['REFERENCE_TYPE']]) {
         case 'QRR':
         case 'SCOR':
-            $object->qr_reference_nr = $qrarray[$std['REFERENCE']['line']];
+            $object->qr_reference_nr = $qrarray[$std['REFERENCE']];
             break;
         case 'NON':
-            $object->message = $qrarray[$std['COMMUNICATION']['line']];
+            $object->message = $qrarray[$std['COMMUNICATION']];
             break;
     }
 
-    if (isset($qrarray[$std['ADDITIONNAL_INFO']['line']]) 
-        && !empty($qrarray[$std['ADDITIONNAL_INFO']['line']])) {
-        $object->additional_information = $qrarray[$std['ADDITIONNAL_INFO']['line']];
+    if (isset($qrarray[$std['ADDITIONNAL_INFO']]) 
+        && !empty($qrarray[$std['ADDITIONNAL_INFO']])) {
+        $object->additional_information = $qrarray[$std['ADDITIONNAL_INFO']];
     }
     return $object;
 }
