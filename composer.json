@@ -1,4 +1,14 @@
 {
+    "name": "artnum/bizcuit-swissqr",
+    "description": "Bizcuit SwissQR decoding and validation library",
+    "license": "MIT",
+    "keywords": ["swiss ","qrcode","swiss-qr","billing", "six-group"],
+    "authors": [{
+        "name": "Etienne Bagnoud",
+        "email": "etienne@artnum.ch",
+        "homepage": "https://artnum.ch",
+        "role": "Developper"
+    }],
     "require": {
         "khanamiryan/qrcode-detector-decoder": "^2.0"
     }
