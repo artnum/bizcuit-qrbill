@@ -4,7 +4,7 @@
  */
 namespace BizCuit\SwissQR;
 require(__DIR__ . '/vendor/autoload.php');
-require('qrstd.php');
+require(__DIR__ . '/qrstd.php');
 
 use Zxing\QrReader;
 

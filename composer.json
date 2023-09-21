@@ -9,6 +9,9 @@
         "homepage": "https://artnum.ch",
         "role": "Developper"
     }],
+    "autoload": {
+        "files": ["./read-qr.php" ]
+    },
     "require": {
         "khanamiryan/qrcode-detector-decoder": "^2.0"
     }
