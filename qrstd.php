@@ -7,7 +7,7 @@ use \stdClass;
  * the Swiss QR Bill. Follows version 2.2. 
  * https://www.six-group.com/dam/download/banking-services/standardization/qr-bill/ig-qr-bill-v2.2-fr.pdf
  */
-$SWISS_QRSTD = [
+const SWISS_QRSTD = [
     '0200' => [
         '_RESERVED' =>                      [11, 12, 13, 14, 15, 16, 17],
         'VERSION' =>                        1,
@@ -155,8 +155,7 @@ define('SCOR_REFERENCE_MIN_LEN',    5);
 define('SCOR_REFERENCE_MAX_LEN',    25);
 
 function verify_qrdata (array $qrarray, &$error = ''): bool {
-    global $SWISS_QRSTD;
-    $std = $SWISS_QRSTD['0200'];
+    $std = SWISS_QRSTD['0200'];
 
     if ($qrarray[0] !== 'SPC') { $error = 'SPC'; return false; }
     if(!isset($qrarray[$std['VERSION']])
@@ -261,9 +260,7 @@ function verify_qrdata (array $qrarray, &$error = ''): bool {
 }
 
 function bexio_from_qrdata (array $qrarray): stdClass {
-    global $SWISS_QRSTD;
-
-    $std = $SWISS_QRSTD[$qrarray[1]];
+    $std = SWISS_QRSTD[$qrarray[1]];
     if (!isset($std)) { return false; }
 
     $object = new stdClass();
