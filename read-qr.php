@@ -2,12 +2,10 @@
 /* 
  * Read QR for SwissQR-Bill
  */
+namespace BizCuit\SwissQR;
 require(__DIR__ . '/vendor/autoload.php');
 require('qrstd.php');
 
-use function BizCuit\SwissQR\bexio_from_qrdata;
-use function BizCuit\SwissQR\trim_qrdata;
-use function BizCuit\SwissQR\verify_qrdata;
 use Zxing\QrReader;
 
 // convert: https://imagemagick.org/
