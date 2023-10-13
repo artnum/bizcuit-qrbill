@@ -2,15 +2,16 @@
 /* 
  * Read QR for SwissQR-Bill
  */
+declare(strict_types=1);
+
 namespace BizCuit\SwissQR;
 require(__DIR__ . '/qrstd.php');
 
+use Exception;
+use Imagick;
+use ImagickPixel;
 use Zxing\QrReader;
 
-// convert: https://imagemagick.org/
-define('IMGCONV', '/usr/bin/convert');
-
-define('DATADIR', '/tmp/bizcuit-swissqr');
 /* Below 300dpi, the quality is not good enough so that it doesn't always detect
  * the QR code.
  */
@@ -24,80 +25,79 @@ define('RATIO', DENSITY / 25.4);
 /* https://www.six-group.com/dam/download/banking-services/standardization/qr-bill/style-guide-qr-bill-fr.pdf */
 
 // qrsize is 46mm + 5mm padding on each side
-define('QRSIZE', round(66 * RATIO));
+define('QRSIZE', (int) round(66 * RATIO));
 // must be 62mm from the left of the page
-define('XPOS', round(62 * RATIO));
-// YPOS is 32mm from bottom of the page.
-define('YPOS', round(32 * RATIO));
+define('XPOS', (int) round(62 * RATIO));
+// YPOS is 32mm from bottom of the page (bottom of QR).
+define('YPOS', (int) round(32 * RATIO));
 
-function read_qr_data(string $file, $basedir = null): false|array {
-	$filename = escapeshellarg(realpath($file));
-	$dir = ($basedir ?? DATADIR) . '/' . md5($filename);
-	if (!@mkdir($dir, 0777, true)) { return false; }
 
-	$rotate = 0;
-	$found = false;
-	/* Convert input file to png, crop to where the QR code must be according to
-	* swissqr documentation, try to get the qr code, rotate the image 90 degrees
-	* and try again until a qr code is found.
-	*/
-	do {
-		/* -gravity SouthWest allows to position from the bottom left of the page
-		* -crop 66x66+62+32 crops the image to 66x66 pixels starting at 62mm from
-		* the left of the page and 32mm from the bottom of the page.
-		* -rotate rotates the image by 90 degrees.
-		* TODO replace with Imagick-PHP library
+function read_qr_data(string $file): false|array {
+	try {
+		$filename = realpath($file);
+		if (!$filename) { return false; }
+		if (!is_file($filename) && !is_readable($filename)) { return false; }
+
+		$rotate = 0;
+		$found = false;
+		/* Convert input file to png, crop to where the QR code must be according to
+		* swissqr documentation, try to get the qr code, rotate the image 90 degrees
+		* and try again until a qr code is found.
 		*/
-		$command = sprintf('%s -density %d -colorspace gray -background white -alpha remove -alpha off  -gravity SouthWest -crop  %dx%d+%d+%d -rotate %d %s %s/%s', IMGCONV, DENSITY, QRSIZE, QRSIZE, XPOS, YPOS, $rotate, $filename, $dir, '%05d_file.png');
-		exec($command);
-		$dh = opendir($dir);
-		if (!$dh) { break; }
-		while(($file = readdir($dh)) !== false) {
-			if ($file === '.' || $file === '..') { continue; }
-			$output = [];
-			$qrreader = new QRReader($dir.'/'.$file);
-			$text = $qrreader->text($output);
-			if ($text === false) { continue; }
-			/* documentation says only CR+LF or LF allowed (and some qrbill may
-			 * use CR only in communicaton). So strictly follow the
-			 * documentation
-			 */
-			$output = preg_split("/\r\n|\n/", $text);
-			if ($output === false) { continue; }
-			/* remove trailing spaces */
-			$output = array_map('trim', $output);
-			$lastidx = count($output) - 1;
-			/* EPD must happend somewhere in the last 4 for lines */
-			if ($output[0] === 'SPC' 
-				&&
-				($output[$lastidx] === 'EPD'
-				|| $output[$lastidx - 1] === 'EPD'
-				|| $output[$lastidx - 2] === 'EPD'
-				|| $output[$lastidx - 3] === 'EPD')
-			)  {
-				$found = true;
-				break;
+		$IMagick = new Imagick();
+		if (!$IMagick->setResolution(DENSITY, DENSITY)) { return false; }
+		if (!$IMagick->readImage($filename)) { return false; }
+
+		$whiteColor = new ImagickPixel('white');
+		if (!$IMagick->setImageBackgroundColor($whiteColor)) { return false; }
+		do {		
+			for ($i = 0; $i < $IMagick->getNumberImages(); $i++) {
+				$IMagick->setIteratorIndex($i);
+				$im = $IMagick->getImage();
+				
+				$h = $im->getImageHeight();
+				if ($h < QRSIZE) { continue; }
+				$im->cropImage(QRSIZE, QRSIZE, XPOS, $h - (YPOS + QRSIZE));
+				if ($rotate > 0) { $im->rotateImage($whiteColor, $rotate); }
+				$im->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
+
+				if ($file === '.' || $file === '..') { continue; }
+				$output = [];
+				$qrreader = new QRReader($im, QRReader::SOURCE_TYPE_RESOURCE, true);
+				$text = $qrreader->text($output);
+				if ($text === false) { continue; }
+				/* documentation says only CR+LF or LF allowed (and some qrbill may
+				* use CR only in communicaton). So strictly follow the
+				* documentation
+				*/
+				$output = preg_split("/\r\n|\n/", $text);
+				if ($output === false) { continue; }
+				/* remove trailing spaces */
+				$output = array_map('trim', $output);
+				$lastidx = count($output) - 1;
+				/* EPD must happend somewhere in the last 4 for lines */
+				if ($output[0] === 'SPC' 
+					&&
+					($output[$lastidx] === 'EPD'
+					|| $output[$lastidx - 1] === 'EPD'
+					|| $output[$lastidx - 2] === 'EPD'
+					|| $output[$lastidx - 3] === 'EPD')
+				)  {
+					$found = true;
+					break;
+				}
+
 			}
+			if($found) { break; }
+			$rotate += 90;
+		} while ($rotate != 360);
 
-		}
-		if($found) { break; }
-		$rotate += 90;
-	} while ($rotate != 360);
-
-	/* cleanup */
-	if ($dh) {
-		rewinddir($dh);
-		while(($file = readdir($dh)) !== false) {
-			if ($file === '.' || $file === '..') { continue; }
-			@unlink($dir . '/' . $file);
-		}
-		closedir($dh);
+		/* trim and verify */
+		$output = trim_qrdata($output);
+		if ($found && verify_qrdata($output)) { return $output; }
+	} catch (Exception $e) {
+		throw new Exception('Error decoding SwissQR', 0, $e);
 	}
-	@rmdir($dir);
-
-	/* trim and verify */
-	$output = trim_qrdata($output);
-	if ($found && verify_qrdata($output)) { return $output; }
 
 	return false;
 }
