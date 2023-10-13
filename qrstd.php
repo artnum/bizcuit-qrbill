@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 namespace BizCuit\SwissQR;
 
 use \stdClass;
@@ -59,7 +61,6 @@ function iso7064mod97_10 (string $ref): int {
     ];
     $total = 0;
     for ($i = 0; $i < strlen($ref); $i++) {
-        $value = 0;
         if (isset($LETTER_TO_NUMBER[$ref[$i]])) { $value = $LETTER_TO_NUMBER[$ref[$i]]; }
         if ($value < 0 || $value > MAX_ALPHANUMERIC) { return -1; }
         $total = ($value > 9 ? $total * 100 : $total * 10) + $value;
@@ -126,7 +127,7 @@ function reference_verify (string $reference): bool {
  * @return string[] QR data starting with SPC
  */
 function trim_qrdata (array $qrarray): array {
-    while ($qrarray[0] !== 'SPC') { array_shift($qrarray); }
+    while (!empty($qrarray) && $qrarray[0] !== 'SPC') { array_shift($qrarray); }
     return $qrarray;
 }
 
@@ -259,54 +260,69 @@ function verify_qrdata (array $qrarray, &$error = ''): bool {
     return true;
 }
 
-function bexio_from_qrdata (array $qrarray): stdClass {
+/**
+ * Convert to outgoing payment
+ * 
+ * Generate basic stucture for outgoing payment, it must be completed with data
+ * according to what you are trying to do.
+ * There is many ways to create a payment, this is the one that seem most
+ * useful.
+ * 
+ * @see https://docs.bexio.com/#tag/Outgoing-Payment/operation/ApiOutgoingPayment_POST
+ * 
+ */
+
+function bexio_from_qrdata (
+    array $qrarray, 
+    string $billid = null,
+    string $country = 'CH'
+): false|stdClass {
     $std = SWISS_QRSTD[$qrarray[1]];
     if (!isset($std)) { return false; }
 
     $object = new stdClass();
-    $object->instructed_amount = new stdClass();
-    $object->recipient = new stdClass();
-
-    $object->instructed_amount->currency = $qrarray[$std['CURRENCY']];
-    $object->instructed_amount->amount = $qrarray[$std['AMOUNT']];
-
-    /* here is the fun, Bexio seems to have not followd the guideline for Swiss
-     * qr bills (which is funny for a company that pretend to specialist ont
-     * this particular matter). So, because of that, you have to invent a street
-     * address for company that generate bills with K address line 1 empty in 
-     * order to have Bexio accept the bill ... line 2 must be splitted into two 
-     * parts to have Bexio accept the bill.
-     */
-    $object->recipient->name = $qrarray[$std['ADDR_CREDITOR_NAME']];
-    $object->recipient->country_code = $qrarray[$std['ADDR_CREDITOR_COUNTRY']];
-
-    if ($qrarray[$std['ADDR_CREDITOR_TYPE']] === 'K') {
-        $object->recipient->street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']];
-        if (empty($object->recipient->street)) { $object->recipient->street = ' '; }
-        $l2parts = explode(' ', $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']], 2);
-        $object->recipient->zip = trim(array_shift($l2parts));
-        $object->recipient->city = trim(array_shift($l2parts));
-    } else {
-        $object->recipient->house_number = $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']];
-        $object->recipient->street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']];
-        $object->recipient->zip = $qrarray[$std['ADDR_CREDITOR_NPA']];
-        $object->recipient->city = $qrarray[$std['ADDR_CREDITOR_CITY']];
-    }
-    $object->iban = $qrarray[$std['IBAN']];
-
-    switch($qrarray[$std['REFERENCE_TYPE']]) {
+    if ($billid) { $object->bill_id = $billid; }
+    switch ($qrarray[$std['REFERENCE_TYPE']]) {
         case 'QRR':
         case 'SCOR':
-            $object->qr_reference_nr = $qrarray[$std['REFERENCE']];
+            $object->payment_type = 'QR';
+            $object->reference_no = $qrarray[$std['REFERENCE']];
             break;
         case 'NON':
+            $object->payment_type = "IBAN";
             $object->message = $qrarray[$std['COMMUNICATION']];
             break;
+        default: return false;
     }
 
-    if (isset($qrarray[$std['ADDITIONNAL_INFO']]) 
-        && !empty($qrarray[$std['ADDITIONNAL_INFO']])) {
-        $object->additional_information = $qrarray[$std['ADDITIONNAL_INFO']];
+    $object->currency_code = $qrarray[$std['CURRENCY']];
+    $object->amount = $qrarray[$std['AMOUNT']];
+    $object->is_salary_payment = false;
+
+    /* creditor info */
+    $object->receiver_iban = $qrarray[$std['IBAN']];
+    $object->receiver_name = $qrarray[$std['ADDR_CREDITOR_NAME']];
+    $object->receiver_country_code = $qrarray[$std['ADDR_CREDITOR_COUNTRY']];
+
+    if ($qrarray[$std['ADDR_CREDITOR_TYPE']] === 'K') {
+        $object->receiver_street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']];
+        if (empty($object->receiver_street)) { $object->receiver_street = '-'; }
+        $l2parts = explode(' ', $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']], 2);
+        $object->receiver_postcode = trim(array_shift($l2parts));
+        $object->receiver_city = trim(array_shift($l2parts));
+    } else {
+        $object->receiver_house_no = $qrarray[$std['ADDR_CREDITOR_HOUSE_OR_LINE2']];
+        $object->receiver_street = $qrarray[$std['ADDR_CREDITOR_STREET_OR_LINE1']];
+        if (empty($object->receiver_street)) { $object->receiver_street = '-'; }
+        $object->receiver_postcode = $qrarray[$std['ADDR_CREDITOR_NPA']];
+        $object->receiver_city= $qrarray[$std['ADDR_CREDITOR_CITY']];
+    }
+
+    /* NO FEE can by apply only with domestic payment */
+    if ($country !== substr($qrarray[$std['IBAN']], 0, 2)) {
+        $object->fee_type = 'BREAKDOWN';
+    } else {
+        $object->fee_type = 'NO_FEE';
     }
     return $object;
 }
