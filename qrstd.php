@@ -223,7 +223,9 @@ namespace BizCuit\SwissQR {
         if ($qrarray[0] !== 'SPC') { $error = 'SPC'; return false; }
         if(!isset($qrarray[$std['VERSION']])
             || empty($qrarray[$std['VERSION']])
-            || $qrarray[$std['VERSION']] !== '0200') { $error = 'VERSION'; return false; }
+            // according to https://github.com/swico/www.swiss-qr-invoice.org/issues/14
+            // any 02.. must be considered as version 0200
+            || substr($qrarray[$std['VERSION']], 0, 2) !== '02') { $error = 'VERSION'; return false; }
 
         /* can be only 1, means utf-8 */
         if ($qrarray[$std['CODING']] !== '1') { $error = 'CODING'; return false; }
