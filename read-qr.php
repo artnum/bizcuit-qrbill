@@ -27,15 +27,16 @@ define('RATIO', DENSITY / 25.4);
 /* https://www.six-group.com/dam/download/banking-services/standardization/qr-bill/style-guide-qr-bill-fr.pdf */
 
 // qrsize is 46mm + 5mm padding on each side
-define('QRSIZE', (int) round(52 * RATIO));
+define('QRSIZE', (int) round(55 * RATIO));
 // must be 67mm from the left of the page
-define('XPOS', (int) round(66 * RATIO));
+define('XPOS', (int) round(63 * RATIO));
 // YPOS is 37mm from bottom of the page (bottom of QR).
-define('YPOS', (int) round(38 * RATIO));
+define('YPOS', (int) round(37 * RATIO));
 
 
-function read_qr_data(string $file): false|array {
+function read_qr_data(string $file, &$error): false|array {
 	try {
+        $error = 'File not found';
 		$filename = realpath($file);
 		if (!$filename) { return false; }
 		if (!is_file($filename) && !is_readable($filename)) { return false; }
@@ -46,12 +47,14 @@ function read_qr_data(string $file): false|array {
 		* swissqr documentation, try to get the qr code, rotate the image 90 degrees
 		* and try again until a qr code is found.
 		*/
+        $error = 'Error reading image';
 		$IMagick = new Imagick();
 		if (!$IMagick->setResolution(DENSITY, DENSITY)) { return false; }
 		if (!$IMagick->readImage($filename)) { return false; }
 
 		$whiteColor = new ImagickPixel('white');
 		if (!$IMagick->setImageBackgroundColor($whiteColor)) { return false; }
+        $error = 'Detecting QRCode';
 		do {		
 			for ($i = 0; $i < $IMagick->getNumberImages(); $i++) {
 				$IMagick->setIteratorIndex($i);
@@ -63,6 +66,7 @@ function read_qr_data(string $file): false|array {
 				$im->cropImage(QRSIZE, QRSIZE, XPOS, $h - (YPOS + QRSIZE));
 				if ($rotate > 0) { $im->rotateImage($whiteColor, $rotate); }
 				$im->setImageFormat('png');
+                $im->writeImage($i . '_' . $rotate . '.png');
 				$output = [];
 				$qrreader = new QRReader($im->getImageBlob(), QRReader::SOURCE_TYPE_BLOB);
 				$im->destroy();
@@ -93,10 +97,13 @@ function read_qr_data(string $file): false|array {
 			if($found) { break; }
 			$rotate += 90;
 		} while ($rotate != 360);
+        
+        $error = '';
 
-		/* trim and verify */
+        /* trim and verify */
 		$output = trim_qrdata($output);
-		if ($found && verify_qrdata($output)) { return $output; }
+		if ($found && verify_qrdata($output, $error)) { return $output; }
+        $error = 'QRCode verification failed: ' . $error;
 	} catch (Exception $e) {
 		throw new Exception('Error decoding SwissQR', 0, $e);
 	}
