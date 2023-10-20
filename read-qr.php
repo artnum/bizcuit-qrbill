@@ -25,11 +25,11 @@ define('RATIO', DENSITY / 25.4);
 /* https://www.six-group.com/dam/download/banking-services/standardization/qr-bill/style-guide-qr-bill-fr.pdf */
 
 // qrsize is 46mm + 5mm padding on each side
-define('QRSIZE', (int) round(66 * RATIO));
-// must be 62mm from the left of the page
-define('XPOS', (int) round(62 * RATIO));
-// YPOS is 32mm from bottom of the page (bottom of QR).
-define('YPOS', (int) round(32 * RATIO));
+define('QRSIZE', (int) round(52 * RATIO));
+// must be 67mm from the left of the page
+define('XPOS', (int) round(66 * RATIO));
+// YPOS is 37mm from bottom of the page (bottom of QR).
+define('YPOS', (int) round(38 * RATIO));
 
 
 function read_qr_data(string $file): false|array {
@@ -57,14 +57,14 @@ function read_qr_data(string $file): false|array {
 				
 				$h = $im->getImageHeight();
 				if ($h < QRSIZE) { continue; }
+				$im->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
 				$im->cropImage(QRSIZE, QRSIZE, XPOS, $h - (YPOS + QRSIZE));
 				if ($rotate > 0) { $im->rotateImage($whiteColor, $rotate); }
-				$im->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
-
-				if ($file === '.' || $file === '..') { continue; }
+				$im->setImageFormat('png');
 				$output = [];
-				$qrreader = new QRReader($im, QRReader::SOURCE_TYPE_RESOURCE, true);
-				$text = $qrreader->text($output);
+				$qrreader = new QRReader($im->getImageBlob(), QRReader::SOURCE_TYPE_BLOB);
+				$im->destroy();
+				$text = $qrreader->text(['TRY_HARDER' => true]);
 				if ($text === false) { continue; }
 				/* documentation says only CR+LF or LF allowed (and some qrbill may
 				* use CR only in communicaton). So strictly follow the
