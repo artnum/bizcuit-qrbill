@@ -7,6 +7,8 @@ declare(strict_types=1);
 namespace BizCuit\SwissQR;
 require(__DIR__ . '/qrstd.php');
 
+use stdClass;
+use DateTime;
 use Exception;
 use Imagick;
 use ImagickPixel;
@@ -100,4 +102,102 @@ function read_qr_data(string $file): false|array {
 	}
 
 	return false;
+}
+
+/* according to https://www.swico.ch/media/filer_public/1c/cd/1ccd7062-fc69-40f8-be3f-2a3ba9048c5f/v2_qr-bill-s1-syntax-fr.pdf */
+function decode_swicov1 (array $qrcontent):false|stdClass {
+    $bill = new stdClass;
+	$bill->tva = new stdClass;
+
+	/* after trailer, might not be set */
+	if (!isset($qrcontent[QRCH\AddInf\StrdBkgInf])) { return false; }
+	
+	$content = $qrcontent[QRCH\AddInf\StrdBkgInf];
+    if (empty($content)) { return false; }
+    if (!str_starts_with($content,  '//')) { return false; }
+    
+	$parts = explode('/', substr($content, 2));
+    if (array_shift($parts) !== 'S1') { return false; }
+    while(!empty($parts)) {
+        switch(array_shift($parts)) {
+            case '10':
+                /* free text */
+                $bill->reference = array_shift($parts);
+                break;
+            case '11':
+                $date = array_shift($parts);
+                $bill->date = new DateTime();
+                $bill->date->setDate(2000 + intval(substr($date, 0, 2)), intval(substr($date, 2, 2)), intval(substr($date, 4, 2)));
+                break;
+            case '20':
+                $bill->reference = array_shift($parts);
+                break;
+            case '30':
+                $bill->ide = array_shift($parts);
+                break;
+            case '31':
+                $date = array_shift($parts);
+                if (strlen($date) >= 6) {
+                    $bill->tva->begin = new DateTime();
+                    $bill->tva->begin->setDate(2000 + intval(substr($date, 0, 2)), intval(substr($date, 2, 2)), intval(substr($date, 4, 2)));
+                }
+                if (strlen($date) > 6) {
+                    $bill->tva->end = new DateTime();
+                    $bill->tva->end->setDate(2000 + intval(substr($date, 6, 2)), intval(substr($date, 8, 2)), intval(substr($date, 10, 2)));
+                } else {
+                    $bill->tva->end = $bill->tva->begin;
+                }
+                break;
+            case '32':
+                $bill->tva->details = [];
+                $tva = array_shift($parts);
+                $tva = explode(';', $tva);
+                if (count($tva) === 1) {
+                    $bill->tva->details[] = ['rate' => $tva[0], 'amount' => 0];
+                    break;
+                }
+                foreach($tva as $t) {
+                    $t = explode(':', $t);
+                    if (count($t) === 2) {
+                        $bill->tva->details[] = ['rate' => $tva[0], 'amount' => floatval($t[1])];
+                    }
+                }
+                break;
+            case '33':
+                $bill->tva->import = [];
+                $tva = array_shift($parts);
+                $tva = explode(';', $tva);
+                if (count($tva) === 1) {
+                    $t = explode(':', $tva[0]);
+                    if (count($t) === 2) {
+                        $bill->tva->import[] = ['rate' => $t[0], 'amount' => floatval($t[1])];
+                    }
+                    break;
+                }
+                foreach($tva as $t) {
+                    $t = explode(':', $t);
+                    if (count($t) === 2) {
+                        $bill->tva->import[] = ['rate' => $t[0], 'amount' => floatval($t[1])];
+                    }
+                }
+                break;
+            case '40':
+                $bill->conditions = [];
+                $conditions = array_shift($parts);
+                $conditions = explode(';', $conditions);
+                foreach($conditions as $condition) {
+                    $condition = explode(':', $condition);
+                    if (count($condition) === 2) {
+                        $bill->conditions[] = ['reduction' => floatval($condition[0]), 'day' => intval($condition[1])];
+                    }
+                }
+                break;
+            default:
+                /* unknown field we just remove value */
+                array_shift($parts);
+                continue 2;
+        }
+    }
+
+    return $bill;
 }
