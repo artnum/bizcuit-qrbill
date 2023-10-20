@@ -34,7 +34,7 @@ define('XPOS', (int) round(63 * RATIO));
 define('YPOS', (int) round(37 * RATIO));
 
 
-function read_qr_data(string $file, &$error): false|array {
+function read_qr_data(string $file, string &$error = ''): false|array {
 	try {
         $error = 'File not found';
 		$filename = realpath($file);
