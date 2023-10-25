@@ -27,11 +27,11 @@ define('RATIO', DENSITY / 25.4);
 /* https://www.six-group.com/dam/download/banking-services/standardization/qr-bill/style-guide-qr-bill-fr.pdf */
 
 // qrsize is 46mm + 5mm padding on each side
-define('QRSIZE', (int) round(55 * RATIO));
+define('QRSIZE', (int) round(65 * RATIO));
 // must be 67mm from the left of the page
-define('XPOS', (int) round(63 * RATIO));
+define('XPOS', (int) round(58 * RATIO));
 // YPOS is 37mm from bottom of the page (bottom of QR).
-define('YPOS', (int) round(37 * RATIO));
+define('YPOS', (int) round(32 * RATIO));
 
 
 function read_qr_data(string $file, string &$error = ''): false|array {
