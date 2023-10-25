@@ -34,13 +34,8 @@ define('XPOS', (int) round(58 * RATIO));
 define('YPOS', (int) round(32 * RATIO));
 
 
-function read_qr_data(string $file, string &$error = ''): false|array {
+function read_qr_data(string $blob, string &$error = ''): false|array {
 	try {
-        $error = 'File not found';
-		$filename = realpath($file);
-		if (!$filename) { return false; }
-		if (!is_file($filename) && !is_readable($filename)) { return false; }
-
 		$rotate = 0;
 		$found = false;
 		/* Convert input file to png, crop to where the QR code must be according to
@@ -50,7 +45,7 @@ function read_qr_data(string $file, string &$error = ''): false|array {
         $error = 'Error reading image';
 		$IMagick = new Imagick();
 		if (!$IMagick->setResolution(DENSITY, DENSITY)) { return false; }
-		if (!$IMagick->readImage($filename)) { return false; }
+		if (!$IMagick->readImageBlob($blob)) { return false; }
 
 		$whiteColor = new ImagickPixel('white');
 		if (!$IMagick->setImageBackgroundColor($whiteColor)) { return false; }
