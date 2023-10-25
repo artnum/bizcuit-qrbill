@@ -63,10 +63,9 @@ function read_qr_data(string $file, string &$error = ''): false|array {
 				$h = $im->getImageHeight();
 				if ($h < QRSIZE) { continue; }
 				$im->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
-				$im->cropImage(QRSIZE, QRSIZE, XPOS, $h - (YPOS + QRSIZE));
 				if ($rotate > 0) { $im->rotateImage($whiteColor, $rotate); }
+                $im->cropImage(QRSIZE, QRSIZE, XPOS, $h - (YPOS + QRSIZE));
 				$im->setImageFormat('png');
-                $im->writeImage($i . '_' . $rotate . '.png');
 				$output = [];
 				$qrreader = new QRReader($im->getImageBlob(), QRReader::SOURCE_TYPE_BLOB);
 				$im->destroy();
