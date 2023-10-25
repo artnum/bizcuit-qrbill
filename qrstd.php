@@ -293,10 +293,8 @@ namespace BizCuit\SwissQR {
                         || strlen($qrarray[$std[$addrs . '_NPA']]) > MAX_NPA_LEN) { $error = $addrs . '_NPA'; return false; }
                     if (empty($qrarray[$std[$addrs . '_CITY']])
                         || strlen($qrarray[$std[$addrs . '_CITY']]) > MAX_CITY_LEN) { $error = $addrs . '_CITY'; return false; }
-                    if (isset($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']])
-                        || strlen($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']]) > MAX_HOUSE_LEN) { $error = $addrs . '_HOUSE_OR_LINE2'; return false; }
-                    if (isset($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) 
-                        && strlen($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) > MAX_STREET_LINE1_LEN) { $error = $addrs . '_STREET_OR_LINE1'; return false; }
+                    if (strlen($qrarray[$std[$addrs . '_HOUSE_OR_LINE2']]) > MAX_HOUSE_LEN) { $error = $addrs . '_HOUSE_OR_LINE2'; return false; }
+                    if (strlen($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) > MAX_STREET_LINE1_LEN) { $error = $addrs . '_STREET_OR_LINE1'; return false; }
                     break;
                 case 'K':
                     if (!empty($qrarray[$std[$addrs . '_NPA']])) { $error = $addrs . '_NPA'; return false; }
