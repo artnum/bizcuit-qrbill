@@ -305,6 +305,7 @@ namespace BizCuit\SwissQR {
                         && strlen($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) > MAX_STREET_LINE1_LEN) { $error = $addrs . '_STREET_OR_LINE1'; return false; }
                     break;
                 default:
+                    if ($addrs === 'ADDR_DEBITOR') { break; }
                     $error = $addrs . '_TYPE';
                     return false;
             }
