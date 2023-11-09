@@ -287,7 +287,7 @@ namespace BizCuit\SwissQR {
         }
 
         foreach(['ADDR_CREDITOR', 'ADDR_DEBITOR'] as $addrs) {
-            if (!$no_debitor && $addrs === 'ADDR_DEBITOR') { continue; }
+            if ($no_debitor && $addrs === 'ADDR_DEBITOR') { continue; }
             if (empty($qrarray[$std[$addrs . '_NAME']])
                 || strlen($qrarray[$std[$addrs . '_NAME']]) > MAX_NAME_LEN) { $error = $addrs . '_NAME'; return false; }
             if (empty($qrarray[$std[$addrs . '_COUNTRY']]) 
