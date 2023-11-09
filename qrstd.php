@@ -243,14 +243,19 @@ namespace BizCuit\SwissQR {
             if (!empty($qrarray[$reserved])) { $error = '_RESERVED'; return false; }
         }
 
+        $no_debitor = false;
+        if (empty($qrarray[$std['ADDR_DEBITOR_TYPE']])) {
+            $no_debitor = true;
+        }
+
         /* MANDATORY FIELDS */
         if (empty($qrarray[$std['IBAN']])) { $error = 'IBAN'; return false; }
         if (empty($qrarray[$std['CURRENCY']])) { $error = 'CURRENCY'; return false; }
         if (empty($qrarray[$std['ADDR_CREDITOR_TYPE']])) { $error = 'ADDR_CREDITOR_TYPE'; return false; }
         if (empty($qrarray[$std['ADDR_CREDITOR_NAME']])) { $error = 'ADDR_CREDITOR_NAME'; return false; }
-        if (empty($qrarray[$std['ADDR_DEBITOR_NAME']])) { $error = 'ADDR_DEBITOR_NAME'; return false; }
+        if (!$no_debitor && empty($qrarray[$std['ADDR_DEBITOR_NAME']])) { $error = 'ADDR_DEBITOR_NAME'; return false; }
         if (empty($qrarray[$std['ADDR_CREDITOR_COUNTRY']])) { $error = 'ADDR_CREDITOR_COUNTRY'; return false; }
-        if (empty($qrarray[$std['ADDR_DEBITOR_COUNTRY']])) { $error = 'ADDR_DEBITOR_COUNTRY'; return false; }
+        if (!$no_debitor && empty($qrarray[$std['ADDR_DEBITOR_COUNTRY']])) { $error = 'ADDR_DEBITOR_COUNTRY'; return false; }
 
         /* verify IBAN checksum */
         if (iban_verify($qrarray[$std['IBAN']]) === false) { $error = 'IBAN'; return false; }
@@ -282,6 +287,7 @@ namespace BizCuit\SwissQR {
         }
 
         foreach(['ADDR_CREDITOR', 'ADDR_DEBITOR'] as $addrs) {
+            if (!$no_debitor && $addrs === 'ADDR_DEBITOR') { continue; }
             if (empty($qrarray[$std[$addrs . '_NAME']])
                 || strlen($qrarray[$std[$addrs . '_NAME']]) > MAX_NAME_LEN) { $error = $addrs . '_NAME'; return false; }
             if (empty($qrarray[$std[$addrs . '_COUNTRY']]) 
@@ -304,7 +310,6 @@ namespace BizCuit\SwissQR {
                         && strlen($qrarray[$std[$addrs . '_STREET_OR_LINE1']]) > MAX_STREET_LINE1_LEN) { $error = $addrs . '_STREET_OR_LINE1'; return false; }
                     break;
                 default:
-                    if ($addrs === 'ADDR_DEBITOR') { break; }
                     $error = $addrs . '_TYPE';
                     return false;
             }
