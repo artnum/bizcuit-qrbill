@@ -247,7 +247,6 @@ namespace BizCuit\SwissQR {
         if (empty($qrarray[$std['IBAN']])) { $error = 'IBAN'; return false; }
         if (empty($qrarray[$std['CURRENCY']])) { $error = 'CURRENCY'; return false; }
         if (empty($qrarray[$std['ADDR_CREDITOR_TYPE']])) { $error = 'ADDR_CREDITOR_TYPE'; return false; }
-        if (empty($qrarray[$std['ADDR_DEBITOR_TYPE']])) { $error = 'ADDR_DEBITOR_TYPE'; return false; }
         if (empty($qrarray[$std['ADDR_CREDITOR_NAME']])) { $error = 'ADDR_CREDITOR_NAME'; return false; }
         if (empty($qrarray[$std['ADDR_DEBITOR_NAME']])) { $error = 'ADDR_DEBITOR_NAME'; return false; }
         if (empty($qrarray[$std['ADDR_CREDITOR_COUNTRY']])) { $error = 'ADDR_CREDITOR_COUNTRY'; return false; }
