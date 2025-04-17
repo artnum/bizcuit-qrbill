@@ -257,6 +257,13 @@ namespace BizCuit\SwissQR {
         if (empty($qrarray[$std['ADDR_CREDITOR_COUNTRY']])) { $error = 'ADDR_CREDITOR_COUNTRY'; return false; }
         if (!$no_debitor && empty($qrarray[$std['ADDR_DEBITOR_COUNTRY']])) { $error = 'ADDR_DEBITOR_COUNTRY'; return false; }
 
+        if (!empty($qrarray[$std['AMOUNT']])) {
+            if(!preg_match('/^\d+\.\d{2}$/', $qrarray[$std['AMOUNT']])) {
+                $error = 'AMOUNT';
+                return false;
+            }
+        }
+
         /* verify IBAN checksum */
         if (iban_verify($qrarray[$std['IBAN']]) === false) { $error = 'IBAN'; return false; }
 
@@ -341,7 +348,7 @@ namespace BizCuit\SwissQR {
 
     function bexio_from_qrdata (
         array $qrarray, 
-        string $billid = null,
+        ?string $billid = null,
         string $country = 'CH'
     ): false|stdClass {
         $std = SWISS_QRSTD[$qrarray[1]];
